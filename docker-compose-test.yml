@@ -1,0 +1,68 @@
+version: '3.8'
+
+# Docker Compose configuration for AuthService testing
+# Test Case ID: EPMCDMETST-36039
+
+services:
+  redis:
+    image: redis:7.0-alpine
+    container_name: auth-test-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - auth-test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: auth-test-postgres
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: authuser
+      POSTGRES_PASSWORD: authpass
+    ports:
+      - "5432:5432"
+    networks:
+      - auth-test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authuser -d authdb"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth-service-test
+    environment:
+      SPRING_PROFILES_ACTIVE: test
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/authdb
+      SPRING_DATASOURCE_USERNAME: authuser
+      SPRING_DATASOURCE_PASSWORD: authpass
+      JWT_SECRET: testSecretKeyForJWTTokenGenerationAndValidation
+      JWT_EXPIRATION: 3600000
+    ports:
+      - "8080:8080"
+    networks:
+      - auth-test-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+networks:
+  auth-test-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
